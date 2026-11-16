@@ -124,6 +124,9 @@ const app = initializeApp({
 });
 const db = getDatabase(app);
 const USERS = "Shuvo_Users69x ";   // শেষে space আছে, অ্যাপের মতোই
+// অ্যাপের ইউজার ফিল্ডের নামের শেষে এই suffix বসে (যেমন Username + SUF)
+const SUF = "fahim_8KxP92mQ7vL4nT6wZ3aB5cR1Y9uH";
+const F = { Username: "Username" + SUF, Password: "Password" + SUF, Winning: "Winning" + SUF, Balance: "Balance" + SUF };
 const FALLBACK_IMG = "https://placehold.co/200/e91e8c/white?text=TOP";
 
 // Firebase নোড:
@@ -149,7 +152,7 @@ window.navBack = () => {
 function split(price, w, d){ const fromW = Math.min(w, price); return { fromW, fromD: price - fromW, ok: (w + d) >= price }; }
 
 function render(){
-  const w = num(user.Winning), d = num(user.Balance);
+  const w = num(user[F.Winning]), d = num(user[F.Balance]);
   $('win').innerText = w; $('dep').innerText = d; $('bal2').innerText = w + d; $('tot').innerText = w + d;
 }
 
@@ -215,7 +218,7 @@ window.openConfirm = async () => {
   if(!sel) return Swal.fire({icon:'warning', title:'Select Pack', text:'Please select a recharge package!'});
   if(type !== 'code' && uid.length < 5) return Swal.fire({icon:'warning', title:'Invalid ID', text:'সঠিক Player ID দিন'});
   if(type !== 'uid' && num(sel.stockCount) <= 0) return Swal.fire({icon:'error', title:'Out of Stock', text:'দুঃখিত, এই প্যাকেজ এখন স্টকে নেই।'});
-  const price = num(sel.price), s = split(price, num(user.Winning), num(user.Balance));
+  const price = num(sel.price), s = split(price, num(user[F.Winning]), num(user[F.Balance]));
   if(!s.ok) return Swal.fire({icon:'error', title:'Low Balance', text:'পর্যাপ্ত ব্যালেন্স নেই। আগে টাকা অ্যাড করুন।'});
   const r = await Swal.fire({
     title: 'Confirm Purchase?', icon: 'question', showCancelButton: true,
@@ -238,16 +241,16 @@ async function deduct(price){
   let used = null;
   const res = await runTransaction(ref(db, USERS + "/" + uKey), cur => {
     if(!cur) return cur;
-    const s = split(price, num(cur.Winning), num(cur.Balance));
+    const s = split(price, num(cur[F.Winning]), num(cur[F.Balance]));
     if(!s.ok) return;
-    used = s; cur.Winning = num(cur.Winning) - s.fromW; cur.Balance = num(cur.Balance) - s.fromD; return cur;
+    used = s; cur[F.Winning] = num(cur[F.Winning]) - s.fromW; cur[F.Balance] = num(cur[F.Balance]) - s.fromD; return cur;
   });
   if(!res.committed || !used) throw new Error("Insufficient Balance");
   user = res.snapshot.val(); return used;
 }
 async function refund(u){
   const r = await runTransaction(ref(db, USERS + "/" + uKey), cur => {
-    if(!cur) return cur; cur.Winning = num(cur.Winning) + u.fromW; cur.Balance = num(cur.Balance) + u.fromD; return cur;
+    if(!cur) return cur; cur[F.Winning] = num(cur[F.Winning]) + u.fromW; cur[F.Balance] = num(cur[F.Balance]) + u.fromD; return cur;
   });
   if(r.snapshot.val()) user = r.snapshot.val();
 }
@@ -284,7 +287,7 @@ window.confirmBuy = async () => {
       runTransaction(ref(db, 'Shuvo_Topup_Packages/' + sel.id + '/stockCount'), c => Math.max(0, num(c) - 1)).catch(() => {});
     }
     const order = {
-      Username: user.Username, Game: game.name, GameId: game.id, Package: sel.name, PackageId: sel.id, PlayerUID: uid, Type: type,
+      Username: user[F.Username], Game: game.name, GameId: game.id, Package: sel.name, PackageId: sel.id, PlayerUID: uid, Type: type,
       Price: price, FromWinning: used.fromW, FromBalance: used.fromD, Time: Date.now(),
       Status: type === 'code' ? 'success' : 'pending'
     };
@@ -322,12 +325,12 @@ window.openOrders = async () => {
   try{
     const list = [];
     try{
-      const s = await get(query(ref(db, 'Shuvo_Topup_Orders'), orderByChild('Username'), equalTo(user.Username)));
+      const s = await get(query(ref(db, 'Shuvo_Topup_Orders'), orderByChild('Username'), equalTo(user[F.Username])));
       s.forEach(c => { list.push(c.val()); });
     }catch(_){
       // Firebase এ .indexOn না থাকলে সব অর্ডার এনে এখানেই ফিল্টার করবে
       const s = await get(ref(db, 'Shuvo_Topup_Orders'));
-      s.forEach(c => { const v = c.val(); if(v && v.Username === user.Username) list.push(v); });
+      s.forEach(c => { const v = c.val(); if(v && v.Username === user[F.Username]) list.push(v); });
     }
     list.sort((a,b) => num(b.Time) - num(a.Time));
     $('ol').innerHTML = list.slice(0, 30).map(o => {
@@ -353,7 +356,7 @@ async function autoLogin(){
   if(!name) return fail("অ্যাপ থেকে লগইন করুন");
   try{
     const snap = await get(ref(db, USERS));
-    snap.forEach(c => { const v = c.val(); if(v && v.Username === name && String(v.Password) === String(pass)){ uKey = c.key; user = v; } });
+    snap.forEach(c => { const v = c.val(); if(v && v[F.Username] === name && String(v[F.Password]) === String(pass)){ uKey = c.key; user = v; } });
     if(!user) return fail("ইউজার পাওয়া যায়নি");
     await loadData();
     $('msg').classList.add('hidden'); $('hbal').classList.remove('hidden'); $('obtn').classList.remove('hidden');
